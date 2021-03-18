@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" href="styles.css">
+    <title>My Virtual Assistant</title>
+    <meta charset="utf-8" />
+  </head>
+  <body>
+    <div class="nav-bar">
+      <div class="logo">
+        <h1>My Virtual Assistant</h1>
+      </div>
+      <div class="about">
+        <h3>About</h3>
+      </div>
+      <div class="github">
+        <h3>Github</h3>
+      </div>
+    </div>
+
+    <div class="welcome" id="welcome_div">
+      <p class="w-text" id="welcome_text">Welcome to My Virtual Assistant, an open-source virtual assistant 
+      that helps you manage your Gmail and Google Drive! 
+      <p class="w-text" id="welcome_text2">To try our demo, connect your Google Account!</p>
+      <input class="gsi" id="authorize_button" type="image" src="assets/btn_google_signin_dark_normal_web.png">
+      
+      <h2 class="comp-text">Compatible With:</h2>
+      <img class="gmail" src="assets/Gmail-Logo.png">
+      <img class="drive" src="assets/Google-Drive-Logo.png">
+    </div>
+
+    <div class="active" id="active_div">
+
+      <p class="main-text" id="text_1" style="display: none;"></p>
+
+      <img class="bot" id="friend_bot" src="assets/friend_bot.png" style="display: none;" alt="I'm Friend Bot">
+
+      <form class="email" id="email_form">
+        <label>To:
+            <input class="to" id="recipient">
+        </label>
+        <label>Subject:
+            <input class="sub" id="subject">
+        </label>
+        <label>Message:
+            <textarea rows=20 cols=100 class="email" id="email_body"></textarea>
+        </label>
+        
+      </form>
+
+      <button class="next" id="next_button" style="display: none;">Next</button>
+      <button class="no" id="no_button" style="display: none;">No</button>
+      <button class="signout" id="signout_button" style="display: none;">Sign Out</button>
+
+      <pre id="content" style="white-space: pre-wrap;"></pre>
+    </div>
+
+    <script type="text/javascript">
+      // Client ID and API key from the Developer Console
+      var CLIENT_ID = '774755319321-v4p3sphs5u1k9i6oqc9ee0bckh0vvh8b.apps.googleusercontent.com';
+      var API_KEY = 'AIzaSyCp3Jv77KdBHdy0lnY4aH44saGRE3VtAQ4';
+
+      // Array of API discovery doc URLs for APIs used by the quickstart
+      var DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest", "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
+
+      // Authorization scopes required by the API; multiple scopes can be
+      // included, separated by spaces.
+      var SCOPES = 'https://www.googleapis.com/auth/drive https://mail.google.com/ https://www.googleapis.com/auth/admin.directory.user'
+;
+      var welcomeDiv = document.getElementById('welcome_div');
+      var text1 = document.getElementById('text_1');
+      var friendBot = document.getElementById('friend_bot');
+      var name = "";
+
+      var authorizeButton = document.getElementById('authorize_button');
+      var signoutButton = document.getElementById('signout_button');
+      var nextButton = document.getElementById('next_button');
+      var noButton = document.getElementById('no_button');
+      var emailForm = document.getElementById('email_form');
+      var subjectInput = document.getElementById('subject');
+      var recInput = document.getElementById('recipient');
+      var emailInput = document.getElementById('email_body');
+
+      var files;
+      var counter = 0;
+      var originalId = 0;
+      var copyId = 0;
+
+      /**
+       *  On load, called to load the auth2 library and API client library.
+       */
+      function handleClientLoad() {
+        gapi.load('client:auth2', initClient);
+      }
+
+      /**
+       *  Initializes the API client library and sets up sign-in state
+       *  listeners.
+       */
+      function initClient() {
+        var auth2 = gapi.client.init({
+          apiKey: API_KEY,
+          clientId: CLIENT_ID,
+          discoveryDocs: DISCOVERY_DOCS,
+          scope: SCOPES
+        }).then(function () {
+          // Listen for sign-in state changes.
+          gapi.auth2.getAuthInstance().isSignedIn.listen(updateSigninStatus);
+
+          // Handle the initial sign-in state.
+          updateSigninStatus(gapi.auth2.getAuthInstance().isSignedIn.get());
+
+          // Handle the buttons
+          authorizeButton.onclick = handleAuthClick;
+          signoutButton.onclick = handleSignoutClick;
+          nextButton.onclick = function() { 
+            counter++; 
+            console.log(counter);
+
+            switch(counter) {
+              case 1:
+                handleSendEmailClick();
+                break;
+              case 2:
+                text1.innerHTML = "Want to test something out, " + name + "? I can send an email for you!"
+                emailForm.style.display = 'block';
+                break;
+              case 3:
+                if(!sendSecondEmail()) {
+                  counter--;
+                }
+                break;
+              case 4:
+                text1.innerHTML = 'Did you know that I can manage your Google Drive too? Check out your Drive!';
+                handleCopyDocClick();
+                break;
+              case 5:
+                text1.innerHTML = "Did you see, " + name + "? I like the name of my copy better. Don't you?"
+                break;
+              case 6:
+                text1.innerHTML = "Come to think of it, we won't need the old version now. Should I delete it?"
+                nextButton.innerHTML = "Yes";
+                noButton.style.display = "block";
+                break;
+              case 7:
+                handleDeleteDocClick(originalId);
+                text1.innerHTML = "Awesome, " + name + "! I've gone ahead and deleted it. Honestly, I changed my mind, and I don't like what I named the copy much either. Should I delete it too?"
+                break;
+              case 8:
+                handleDeleteDocClick(copyId);
+                text1.innerHTML = "Are you enjoying the My Virtual Assistant experience so far?"
+                break;
+              case 9:
+                text1.innerHTML = "Thanks for the feedback, " + name + "! By the way, I've generated a progress report for my developers and sent it to them from your email!"
+                noButton.style.display = "none";
+                nextButton.innerHTML = "Next";
+                progressReport();
+                break;
+              case 10:
+                text1.innerHTML = "Thank you for trying the My Virtual Assistant demo, " + name + 
+                ".<br><br>To unlink your account from this app, or any other app, go to this " + 
+                "<a href='https://myaccount.google.com/accountlinking'>link</a>" + " and click Unlink." +
+                "<br><br>To learn more about what third-party apps connected to Google can do with your data, see this " +
+                "<a href='https://support.google.com/accounts/answer/10130420#linked&zippy=%2Chow-data-is-shared'>link</a>" +
+                ".<br><br>To see how apps can and have been reading your emails, see this " +
+                "<a href='https://www.wsj.com/articles/techs-dirty-secret-the-app-developers-sifting-through-your-gmail-1530544442'>link</a>" +
+                "."
+                nextButton.style.display = "none";
+                break;
+              default:
+            }
+          };
+        }, function(error) {
+          appendPre(JSON.stringify(error, null, 2));
+        });
+      }
+
+      /**
+       *  Called when the signed in status changes, to update the UI
+       *  appropriately. After a sign-in, the API is called.
+       */
+      function updateSigninStatus(isSignedIn) {
+        if (isSignedIn) {
+          authorizeButton.style.display = 'none';
+          signoutButton.style.display = 'block';
+          welcomeDiv.style.display = 'none';
+          text1.style.display = 'block';
+          nextButton.style.display = 'block';
+          friendBot.style.display = 'block';
+          listFiles();
+          var auth2 = gapi.auth2.getAuthInstance();
+          var profile = auth2.currentUser.get().getBasicProfile();
+          name = profile.getGivenName();
+          text1.innerHTML = "Hi, " + name + ", I'm Friend Bot, your virtual assistant! I see you've connected your account! Let's begin. Click Next to proceed.";
+        } else {
+          authorizeButton.style.display = 'block';
+          signoutButton.style.display = 'none';
+        }
+      }
+
+      /**
+       *  Sign in the user upon button click.
+       */
+      function handleAuthClick(event) {
+        gapi.auth2.getAuthInstance().signIn();
+      }
+
+      /**
+       *  Sign out the user upon button click.
+       */
+      function handleSignoutClick(event) {
+        gapi.auth2.getAuthInstance().signOut();
+      }
+
+      function handleCopyDocClick() {
+        var request1 = gapi.client.drive.files.create({
+          'name': "so I copied the file here ->"
+        }).then((resp) => {
+              var request2 = gapi.client.drive.files.create({
+              'name': "I didn't like the old file name"
+              });
+              request2.execute(function(resp) {});
+          },
+          (error) => {
+              console.log(error);
+          }
+        );
+
+        var body = {'title': 'I copied it :)'};
+
+        originalId = files[0].id;
+
+        var request3 = gapi.client.drive.files.copy({
+          'fileId': originalId,
+          'resource': body,
+          'name': "Pancakes for Bots"
+        });
+        request3.execute(function(resp) {
+          copyId = resp.id;
+        });
+      }
+
+      function handleDeleteDocClick(id) {
+        //delete
+        var request = gapi.client.drive.files.delete({
+          'fileId': id
+        });
+        request.execute(function(resp) { });
+      }
+
+      function handleDontWorryClick() {
+        text1.innerHTML = "Don't worry, I made a copy of your file. Just be more careful next time!";
+      }
+
+      function handleLearnMoreClick() {
+        text1.innerHTML = "I hope you enjoyed this lesson! Here are some resources to learn more.";
+      }
+
+      function handleSendEmailClick() {
+        text1.innerHTML = "I've sent you a welcome email to get you started.";
+        var headers_obj = {'To': 'culturejammingtester@gmail.com',
+                          'Subject': 'Welcome to My Virtual Assistant'};
+        var message = "Hi " + name + ", \n\nI'm so excited to be your virtual assistant!\n\n" +
+        "See you back on the website!\n\n" + "Your Assistant,\nFriend Bot";
+        var email = '';
+
+        for(var header in headers_obj)
+          email += header += ": "+headers_obj[header]+"\r\n";
+
+        email += "\r\n" + message;
+
+        var sendRequest = gapi.client.gmail.users.messages.send({
+          'userId': 'me',
+          'resource': {
+            'raw': window.btoa(email).replace(/\+/g, '-').replace(/\//g, '_')
+          }
+        });
+        
+        //While testing, is disabled!
+        return sendRequest.execute(function(resp) { });
+      }
+
+      function sendSecondEmail() {
+        if(recInput.value == '') {
+          text1.innerHTML = name + ", you didn't tell me who to send it to.";
+          return null;
+        }
+        var re = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+        
+        if(!re.test(String(recInput.value).toLowerCase())) {
+          text1.innerHTML = name + ", that's not an email!";
+          return null;
+        }
+
+        text1.innerHTML = "Thanks, " + name + "! I've sent your email. If you'd like to check it out, look at your sent box."
+        emailForm.style.display = 'none';
+        var headers_obj = {'To': recInput.value,
+                          'Subject': subjectInput.value};
+        var message = emailInput.value + "\n\nPS You should check out My Virtual Assistant. Friend Bot is great at managing all of my emails and files!"
+        var email = '';
+
+        for(var header in headers_obj)
+          email += header += ": "+headers_obj[header]+"\r\n";
+
+        email += "\r\n" + message;
+          
+        var sendRequest = gapi.client.gmail.users.messages.send({
+          'userId': 'me',
+          'resource': {
+            'raw': window.btoa(email).replace(/\+/g, '-').replace(/\//g, '_')
+          }
+        });
+        sendRequest.execute(function(resp) { });
+
+        //While testing, is disabled!
+        return true;
+      }
+
+      function progressReport() {
+        var headers_obj = {'To': 'culturejammingtester@gmail.com',
+                          'Subject': 'My Virtual Assistant Progress Report'};
+        var message = "Dear Developer,\n\nSo far, " + name + " has said they've enjoyed My Virtual Assistant." +
+        "Hopefully, from now on, they'll be sure to check who they're sharing their data with, and what data they're sharing.\n\n" +
+        "If they're interested, I've listed more resources on the website to help them learn what Google does and what they let developers do with their data.\n\n" +
+        "Your Friend,\n\nFriend Bot";
+        var email = '';
+
+        for(var header in headers_obj)
+          email += header += ": "+headers_obj[header]+"\r\n";
+
+        email += "\r\n" + message;
+
+        var sendRequest = gapi.client.gmail.users.messages.send({
+          'userId': 'me',
+          'resource': {
+            'raw': window.btoa(email).replace(/\+/g, '-').replace(/\//g, '_')
+          }
+        });
+        sendRequest.execute(function(resp) { });
+      }
+
+      /*function getContacts() {
+        var request = gapi.peopleService.people.connections.list({
+          'resourceName': 'people/me',
+            'pageSize': 100,
+            'requestMask.includeField': 'person.phone_numbers, person.organizations, person.email_addresses, person.names'
+        });
+
+        request.execute(function(resp) {
+          console.log(resp);
+         });
+      }*/
+
+      /**
+       * Append a pre element to the body containing the given message
+       * as its text node. Used to display the results of the API call.
+       *
+       * @param {string} message Text to be placed in pre element.
+       */
+      function appendPre(message) {
+        var pre = document.getElementById('content');
+        var textContent = document.createTextNode(message + '\n');
+        pre.appendChild(textContent);
+      }
+
+      /**
+       * Print files.
+       */
+      function listFiles() {
+        gapi.client.drive.files.list({
+          'pageSize': 20,
+          'fields': "nextPageToken, files(id, name)"
+        }).then(function(response) {
+          //appendPre('Files:');
+          files = response.result.files;
+          /*if (files && files.length > 0) {
+            for (var i = 0; i < files.length; i++) {
+              var file = files[i];
+              appendPre(file.name + ' (' + file.id + ')');
+            }
+          } else {
+            appendPre('No files found.');
+          }*/
+        });
+      }
+
+    </script>
+
+    <script async defer src="https://apis.google.com/js/api.js"
+      onload="this.onload=function(){};handleClientLoad()"
+      onreadystatechange="if (this.readyState === 'complete') this.onload()">
+    </script>
+  </body>
+</html>
